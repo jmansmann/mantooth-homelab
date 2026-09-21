@@ -6,8 +6,6 @@
 *.key
 kubeconfig
 *.kubeconfig
-talosconfig
-talos/secrets.yaml
 **/secrets.yaml
 **/*-secret.yaml
 **/*-credentials.yaml

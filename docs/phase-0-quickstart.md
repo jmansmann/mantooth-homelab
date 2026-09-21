@@ -9,7 +9,7 @@ Goal: before buying any hardware, stand up a **local Kubernetes cluster**, insta
 Docker must be installed and running (Docker Desktop, or `colima start`). Then install the CLI tooling:
 
 ```bash
-brew install k3d kubectl helm kustomize argocd talosctl
+brew install k3d kubectl helm kustomize argocd
 ```
 
 Verify: `docker info`, `k3d version`, `kubectl version --client`, `argocd version --client`.

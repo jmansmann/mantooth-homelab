@@ -1,6 +1,6 @@
 # clusters/homelab
 
-Overlay for the **bare-metal cluster** (3× mini PCs, Talos Linux, amd64) — the production-shaped environment.
+Overlay for the **bare-metal cluster** (3× mini PCs, Ubuntu Server + kubeadm, amd64) — the production-shaped environment.
 
 This is the sync target of the root app-of-apps in `bootstrap/`. It selects platform components from `platform/` and hosts the apps ApplicationSet.
 
