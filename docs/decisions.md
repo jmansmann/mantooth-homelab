@@ -58,13 +58,13 @@ We need a repository strategy covering application source, cluster/platform conf
 
 ### Decision
 Two kinds of repos:
-- **`homelab`** (config repo): platform components, cluster overlays, and an Argo CD **ApplicationSet** that discovers app repos and generates one Application each.
+- **`mantooth-homelab`** (config repo): platform components, cluster overlays, and an Argo CD **ApplicationSet** that discovers app repos and generates one Application each.
 - **App repos** (`<app>`): source, Dockerfile, **and** their own deployment manifests under `deploy/overlays/<cluster>/`.
 
 CI builds the image and bumps the tag **in the app repo**; Argo CD deploys from there.
 
 ### Alternatives Considered
-- **Centralized config repo** (app repos hold source only; manifests in `homelab`) — simpler visibility, but diverges from the "app team owns their deployment" boundary we want to practice.
+- **Centralized config repo** (app repos hold source only; manifests in `mantooth-homelab`) — simpler visibility, but diverges from the "app team owns their deployment" boundary we want to practice.
 - **Full monorepo** — simplest to start, but mixes concerns and does not model production.
 
 ### Consequences
