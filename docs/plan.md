@@ -102,11 +102,11 @@ Two kinds of repositories, one discovery mechanism:
 
 | Content | Repo |
 |---|---|
-| Platform components, cluster overlays, ApplicationSets, bootstrap | **`homelab`** (this repo — the GitOps/config repo) |
+| Platform components, cluster overlays, ApplicationSets, bootstrap | **`mantooth-homelab`** (this repo — the GitOps/config repo) |
 | Application source, Dockerfile, tests, **and** deployment manifests | **One repo per app** (`<app>`) |
 | Third-party Helm charts | Referenced by URL + pinned version (never vendored) |
 
-The `homelab` repo holds an **Argo CD ApplicationSet** that generates one Application per app repo. Onboarding a new app = creating a repo that follows the convention; the ApplicationSet picks it up.
+The `mantooth-homelab` repo holds an **Argo CD ApplicationSet** that generates one Application per app repo. Onboarding a new app = creating a repo that follows the convention; the ApplicationSet picks it up.
 
 **Deployment flow:**
 
@@ -178,7 +178,7 @@ Control plane (Talos-managed): kube-apiserver, etcd, kube-scheduler, kube-contro
 ## 9. Roadmap
 
 ### Phase 0 — Now, on the Mac (no hardware required)
-1. Install tooling; create GitHub repos (`homelab`, first `<app>`).
+1. Install tooling; create GitHub repos (`mantooth-homelab`, first `<app>`).
 2. Scaffold the repos and this documentation.
 3. Create a local **k3d** cluster + install **Argo CD**.
 4. Build a first webapp with a **multi-arch** Dockerfile; GitHub Actions → GHCR; Argo CD deploys it to k3d.

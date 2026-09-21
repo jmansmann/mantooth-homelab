@@ -1,4 +1,4 @@
-# homelab
+# mantooth-homelab
 
 GitOps and platform configuration for a home Kubernetes lab.
 
@@ -11,6 +11,7 @@ Application **source code does not live here** — each app is its own repositor
 - [`docs/plan.md`](docs/plan.md) — full architecture, hardware, and roadmap
 - [`docs/decisions.md`](docs/decisions.md) — architecture decision records (ADRs)
 - [`docs/phase-0-quickstart.md`](docs/phase-0-quickstart.md) — get a local k3d + Argo CD pipeline running
+- [`docs/status.md`](docs/status.md) — current state and next actions (handoff)
 
 ## Layout
 

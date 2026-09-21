@@ -18,13 +18,13 @@ Verify: `docker info`, `k3d version`, `kubectl version --client`, `argocd versio
 
 Create two **private** repos on GitHub:
 
-- `GITHUB_USER/homelab` — this config repo
+- `GITHUB_USER/mantooth-homelab` — this config repo
 - `GITHUB_USER/<app>` — your first application (a small webapp)
 
-Wire up the local `homelab` repo (run from `~/development/homelab`):
+Wire up the local `mantooth-homelab` repo (run from `~/development/mantooth-homelab`):
 
 ```bash
-git remote add origin git@github.com:GITHUB_USER/homelab.git
+git remote add origin git@github.com:GITHUB_USER/mantooth-homelab.git
 git push -u origin main
 ```
 
@@ -78,7 +78,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/GITHUB_USER/homelab.git
+    repoURL: https://github.com/GITHUB_USER/mantooth-homelab.git
     targetRevision: main
     path: clusters/k3d
   destination:

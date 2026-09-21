@@ -1,4 +1,4 @@
-# AGENTS.md — homelab
+# AGENTS.md — mantooth-homelab
 
 Conventions and orientation for agents working in this repository.
 
