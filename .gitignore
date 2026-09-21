@@ -1,0 +1,27 @@
+# --- Secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig
+*.kubeconfig
+talosconfig
+talos/secrets.yaml
+**/secrets.yaml
+**/*-secret.yaml
+**/*-credentials.yaml
+
+# --- Rendered / build output ---
+dist/
+build/
+*.tgz
+
+# --- Helm ---
+charts/**/charts/
+
+# --- OS / editors ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
