@@ -6,7 +6,8 @@ This is the sync target of the root app-of-apps in `bootstrap/`. It selects plat
 
 | Path | Purpose |
 |---|---|
+| `kustomization.yaml` | Renders everything in this directory for the root app-of-apps |
 | `apps-applicationset.yaml` | Generates one Argo CD Application per application repo |
-| `platform.yaml` | Argo CD Application(s) wiring `platform/` components for this cluster |
+| `platform.yaml` | *(planned)* Argo CD Application(s) wiring `platform/` components for this cluster |
 
-Differences from `clusters/homelab`: smaller resource requests, no Longhorn replication (`longhorn` may be omitted or single-replica), local DNS/TLS substitutes.
+Differences from `clusters/homelab`: smaller resource requests, no Longhorn replication (`longhorn` may be omitted for single-replica), local DNS/TLS substitutes.

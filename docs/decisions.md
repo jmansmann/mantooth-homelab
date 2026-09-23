@@ -17,6 +17,10 @@ Lifecycle: `Proposed → Accepted → (Superseded | Deprecated)`. Don't delete o
 | [009](#adr-009-managed-switch--virtualized-opnsense-lab-vlan-first) | Managed switch + virtualized OPNsense (lab VLAN first) | Accepted |
 | [010](#adr-010-ubuntu-server--kubeadm-on-bare-metal) | Ubuntu Server + kubeadm on bare metal | Accepted |
 | [011](#adr-011-ansible-manages-the-os-layer) | Ansible manages the OS layer | Accepted |
+| [012](#adr-012-makefiles-as-the-standard-repo-command-interface) | Makefiles as the standard repo command interface | Accepted |
+| [013](#adr-013-helm-for-upstream-components-kustomize-for-first-party-manifests) | Helm for upstream components, Kustomize for first-party manifests | Accepted |
+| [014](#adr-014-longhorn-on-shared-nvme-with-three-replicas) | Longhorn on shared NVMe with three replicas | Accepted |
+| [015](#adr-015-media-and-app-data-on-longhorn-backed-up-to-r2) | Media and app data on Longhorn, backed up to R2 | Accepted |
 
 ---
 
@@ -317,3 +321,117 @@ Maintain an **Ansible** codebase — in a dedicated repository (`mantooth-ansibl
 - Adds a repo and a skill to maintain; playbooks must be tested.
 - Secret handling matters: Ansible Vault (or SOPS) for any secrets; never commit plaintext.
 - The Ansible repo becomes part of the disaster-recovery story (rebuild a node from code).
+
+---
+
+## ADR-012: Makefiles as the standard repo command interface
+
+### Status
+Accepted
+
+### Date
+2026-09-22
+
+### Context
+Each repo needs a consistent, discoverable way to run its checks and local tasks. The stack is Go + Docker + Kustomize + kubectl + Argo CD, with CI in GitHub Actions. Without a convention, every repo invents its own commands and the local loop drifts from what CI actually runs.
+
+### Decision
+Every repo exposes a thin **`Makefile`** as its command interface, with a shared target vocabulary. `verify` is mandatory and is the same quality gate CI runs. App repos add `build`, `image`, `manifests`, `deploy`, `port-forward`; the config repo adds `render`, `validate`, `bootstrap`. `help` is the default target. Targets are thin wrappers around existing tools, and CI invokes `make verify` rather than duplicating commands.
+
+### Alternatives Considered
+- **npm scripts** — the wrong toolchain for a Go/Kustomize repo; adds a Node runtime and a package manager purely as a script runner.
+- **`just` / `Task` (Taskfile)** — nicer syntax, but not preinstalled on macOS or GitHub runners, adding a bootstrap dependency for no functional gain.
+- **Earthly / Dagger** — reproducible containerized pipelines; overkill at this scale and duplicates CI.
+- **README commands only** — cheapest, but drifts from CI and varies per repo.
+
+### Consequences
+- One vocabulary across repos; `make verify` is identical locally and in CI.
+- CI calls `make` targets, so local and CI commands cannot diverge.
+- Make's quirks apply (tab-sensitive, no dependency management) — acceptable for thin wrappers.
+- A future frontend keeps npm scoped inside its own directory; Make remains the top-level orchestrator.
+
+---
+
+## ADR-013: Helm for upstream components, Kustomize for first-party manifests
+
+### Status
+Accepted
+
+### Date
+2026-09-22
+
+### Context
+The platform leans on upstream charts (Cilium, MetalLB, Envoy Gateway, cert-manager, Longhorn, External Secrets, Kyverno, kube-prometheus-stack), while the repo also owns first-party resources: ApplicationSets, cluster overlays, and the deployment manifests that app repos ship (ADR-002). We need one consistent rendering strategy so apps and platform components don't each invent their own. Helm and Kustomize solve different problems — packaging/parameterization vs. patching a base per environment — and Argo CD renders both natively.
+
+### Decision
+- **Upstream / third-party components → Helm**, consumed **by reference** (chart repo + pinned chart version) with values committed to Git. Never vendor charts.
+- **First-party manifests** (cluster overlays, ApplicationSets, app deployment manifests) → **Kustomize** bases + overlays.
+- Escalate a first-party component to a Helm chart **only** when it genuinely needs reuse or heavy parameterization; don't template trivial manifests.
+- Argo CD renders both. We do not run `helm install`; Argo owns lifecycle and state.
+
+### Alternatives Considered
+- **All-Helm** — uniform with work experience, but adds a chart + values to every app and hides the rendered result until `helm template`.
+- **All-Kustomize (incl. upstream via `helmCharts`)** — avoids Helm releases entirely, but gives up chart versioning/dependency ergonomics for upstream components.
+- **CUE / Timoni, Tanka (jsonnet), Helmfile, ytt/kapp** — more typing or power, but niche, steeper to learn, or redundant once Argo ApplicationSets exist.
+
+### Consequences
+- A clear, enforceable rule: upstream pinned by chart version, first-party readable as plain YAML with reviewable diffs.
+- Two tools to know, each used in its natural role; skills transfer both ways.
+- Upstream `values` files become part of the config repo and are reviewed like code.
+- A first-party component can graduate to a chart later without changing the platform rule.
+
+---
+
+## ADR-014: Longhorn on shared NVMe with three replicas
+
+### Status
+Accepted
+
+### Date
+2026-09-20
+
+### Context
+The cluster needs resilient persistent storage. Initial hardware is deliberately minimal: **one 1 TB NVMe per node** (the SATA SSD is deferred). OS, etcd, and Longhorn data therefore share a single physical disk per node. The goal is the maximum redundancy achievable with three nodes.
+
+### Decision
+Start with **NVMe-only** storage. Each node's NVMe is **LVM-partitioned** into a root logical volume (OS) and a Longhorn data logical volume — LVM so the planned SATA SSD can later extend the volume group or be added as a second Longhorn disk **without reformatting**. **etcd stays on the local NVMe** (never on Longhorn). Longhorn runs at **replicaCount = 3** (one replica per node) for all volumes.
+
+### Alternatives Considered
+- **SATA data disk from day one** — decouples Longhorn data from OS/etcd and removes the correlated failure, but adds cost before it's needed.
+- **2 replicas** — ~1.5 TB usable and survives one node loss, but a second failure during rebuild risks data loss.
+- **local-path provisioner** — no replication; unsuitable for state.
+
+### Consequences
+- **Redundancy ceiling:** survives any single node/disk loss (Longhorn keeps 2 replicas; etcd quorum 2/3). Cannot survive two simultaneous failures.
+- **Correlated failure:** a disk failure loses that node's OS + etcd member + replica together; there is no headroom for a second failure until the node is rebuilt.
+- **IO contention:** etcd fsyncs compete with Longhorn writes on the same device.
+- **Capacity:** 3 replicas everywhere ⇒ usable ≈ raw ÷ 3 (~1 TB total), shared by all workloads.
+- LVM partitioning preserves a clean upgrade path to the SATA SSD.
+- Offsite backups (ADR-015) are mandatory for total-loss protection.
+
+---
+
+## ADR-015: Media and app data on Longhorn, backed up to R2
+
+### Status
+Accepted
+
+### Date
+2026-09-20
+
+### Context
+Photos (Immich) and general files (Nextcloud) total hundreds of GB, alongside per-app databases. We want local-first access that also survives total local loss.
+
+### Decision
+Store media and app data on **Longhorn volumes** (replicated 3×, ADR-014), with **Velero + Longhorn backups to Cloudflare R2** (S3-compatible). App databases (e.g. Postgres) run as StatefulSets or via an operator (CloudNativePG) on Longhorn PVCs. Position R2 as the **backup/offsite tier**, not the primary.
+
+### Alternatives Considered
+- **MinIO in-cluster** — S3 API for apps, but more moving parts to operate.
+- **Cloudflare R2 as primary** — cheap and resilient, but not local-first (depends on internet) and adds latency.
+- **Local-path volumes for media** — no replication; a disk loss would drop media.
+
+### Consequences
+- Local-first, offline-capable; media available without internet.
+- Media is stored 3× locally, consuming replicated capacity (a real constraint at ~1 TB usable) — this is accepted for safety.
+- Backup schedules and restore drills become required operations.
+- R2 credentials are managed via External Secrets Operator (never in Git).

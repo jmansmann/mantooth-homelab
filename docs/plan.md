@@ -82,21 +82,22 @@ See `docs/decisions.md` for full ADRs.
 |---|---|---|---|
 | Compute nodes | Lenovo M920q/M720q Tiny or Dell OptiPlex 7070 Micro (i5-8500T/9500T class) | 3 | $360–540 |
 | RAM | 32 GB (2×16 DDR4 SO-DIMM) per node | 3 | $150–210 |
-| OS/etcd disk | 1 TB NVMe per node | 3 | $150–210 |
-| Data disk | 1 TB 2.5" SATA SSD per node (Longhorn) | 3 | $150–210 |
+| Storage | 1 TB NVMe per node — OS + etcd + Longhorn (LVM); 2 TB if budget allows | 3 | $150–210 |
+| Storage (optional) | 1 TB 2.5" SATA SSD per node — add later for capacity + fault isolation | 0–3 | $0–210 |
 | Switch | Managed 8-port Gigabit (TP-Link TL-SG108E / Netgear GS308E / used Cisco 2960G) | 1 | $30–60 |
 | Firewall | Virtualized OPNsense (no purchase) | — | $0 |
 | Rack | 10" mini rack (DeskPi RackMate T1 / GeeekPi) + shelves / 1L mounts | 1 | $60–120 |
 | Cabling | Short Cat6 patch cables + keystone patch panel | — | $20–40 |
 | UPS | Small line-interactive (~600–900 VA) | 1 | $70–100 |
 | Domain | Cheap TLD via Cloudflare Registrar | 1 | ~$10/yr |
-| **Total** | | | **~$1,000–1,500** |
+| **Total** | | | **~$850–1,300** (NVMe-only) |
 
 Notes:
 
 - **CPU:** target **i5-8500T / i5-9500T (6c/6t, 8th–9th gen)**; step up to **i7-8700T/9700T or i5-10500T** only if the delta is small. Cores/threads matter more than clocks or generation here — 8th→9th is a minor refresh, and 12th-gen IPC gains aren't worth the platform premium.
 - **RAM:** **32 GB (2×16 GB) used DDR4 SO-DIMM per node**, both slots populated as a matched pair. Prefer DDR4 over DDR5 — the bandwidth difference is negligible for etcd/Longhorn/containers (latency- and IO-bound), and used DDR4 pulls from retired office PCs are far cheaper. Dual-channel and capacity matter more than memory speed.
 - Buy the three nodes as one matched lot from a refurb seller; used DDR4 SO-DIMM is cheap in bulk.
+- **Storage:** start NVMe-only — one 1 TB drive per node, LVM-partitioned (root + Longhorn data). Longhorn runs at **3 replicas** (~1 TB usable total). The SATA SSD is a later addition for capacity and to decouple Longhorn data from the OS/etcd disk. See `docs/notes/storage-architecture.md`.
 - Idle power ≈ 45 W, loaded ≈ 150 W — effectively silent and cool. The gaming PC stays off the 24/7 path for exactly this reason.
 - **OPNsense caveat:** do not make a *virtualized* OPNsense your sole internet gateway initially — if that node reboots, the whole apartment loses internet. Start it as a lab-VLAN router; promote it to the edge (or add a dedicated 2-NIC N100 appliance, ~$150–200) once comfortable.
 
@@ -112,6 +113,8 @@ Three repositories serve the lab:
 | Application source, Dockerfile, tests, **and** deployment manifests | **One repo per app** (`<app>`) |
 | Node OS provisioning and patching (Ansible) | **`mantooth-ansible`** (see ADR-011) |
 | Third-party Helm charts | Referenced by URL + pinned version (never vendored) |
+
+**Manifest management (ADR-013):** upstream/third-party components are consumed as **Helm** charts (by reference, pinned chart version, values in Git); our own resources and app deployment manifests are **Kustomize** bases + overlays.
 
 The `mantooth-homelab` repo holds an **Argo CD ApplicationSet** that generates one Application per app repo. Onboarding a new app = creating a repo that follows the convention; the ApplicationSet picks it up.
 
@@ -157,6 +160,8 @@ This reproduces the real "app pipeline ↔ GitOps repo" boundary that platform t
 
 Control plane (kubeadm-managed): kube-apiserver, etcd, kube-scheduler, kube-controller-manager — HA, with a control-plane VIP (kube-vip). Container runtime: containerd.
 
+**Storage design** (disks, LVM, Longhorn, replicas, media/backups): see `docs/notes/storage-architecture.md` and ADR-014/ADR-015.
+
 ---
 
 ## 7. Access design
@@ -193,28 +198,35 @@ Control plane (kubeadm-managed): kube-apiserver, etcd, kube-scheduler, kube-cont
 
 See `docs/phase-0-quickstart.md`.
 
+### Phase 0.5 — VM dry run on the Mac (before hardware)
+6. Provision 3 Ubuntu Server VMs on the Mac (arm64), each with a second data disk.
+7. Develop and validate the **Ansible baseline** against the VMs.
+8. `kubeadm init` + kube-vip; join the nodes; install Cilium + Longhorn; practice LVM/disk setup and a replica-rebuild drill.
+
+See `docs/phase-0.5-vm-dry-run.md`.
+
 ### Phase 1 — Physical & OS
-6. Rack, switch, cabling; configure VLANs.
-7. Bench nodes, upgrade RAM/disks; install Ubuntu Server LTS.
-8. **Ansible baseline** (ADR-011): users/SSH, time sync, swap off, kernel modules + sysctl, containerd, `kubeadm`/`kubelet`/`kubectl`, patching policy.
-9. `kubeadm init` with a control-plane VIP (kube-vip) + CNI; join the remaining nodes; verify etcd quorum and HA.
+9. Rack, switch, cabling; configure VLANs.
+10. Bench nodes, install RAM; install Ubuntu Server LTS on the NVMe (LVM: root + Longhorn data volume).
+11. Reuse the **Ansible baseline** (ADR-011) from Phase 0.5.
+12. `kubeadm init` + kube-vip + CNI; join the remaining nodes; verify etcd quorum and HA.
 
 ### Phase 2 — Core platform → LAN access working
-10. Argo CD → Cilium → MetalLB → Gateway API/Envoy Gateway → cert-manager → **LAN DNS** → Longhorn.
-11. Reach apps from Mac and phone on WiFi with valid TLS. No public exposure yet.
-12. Add OPNsense lab router + VLANs.
+13. Argo CD → Cilium → MetalLB → Gateway API/Envoy Gateway → cert-manager → **LAN DNS** → Longhorn (3 replicas).
+14. Reach apps from Mac and phone on WiFi with valid TLS. No public exposure yet.
+15. Add OPNsense lab router + VLANs.
 
 ### Phase 3 — Platform services
-13. Observability (Prometheus/Grafana/Loki); External Secrets Operator; Kyverno + PSS + NetworkPolicies + Trivy.
+16. Observability (Prometheus/Grafana/Loki); External Secrets Operator; Kyverno + PSS + NetworkPolicies + Trivy.
 
 ### Phase 4 — Workloads
-14. Immich (photos), Nextcloud or Syncthing+Filebrowser (files), Vaultwarden, Authentik SSO, dashboards.
+17. Immich (photos), Nextcloud or Syncthing+Filebrowser (files), Vaultwarden, Authentik SSO, dashboards — all on Longhorn volumes.
 
 ### Phase 5 — Public, local CI, resilience
-15. In-cluster Gitea/Forgejo + ARC runners.
-16. Cloudflare Tunnel + Zero Trust for public/friend access.
-17. Velero + Longhorn backups → Cloudflare R2; UPS graceful shutdown; node-failure and restore drills; cosign + Falco.
-18. Ongoing Linux/SRE drills: `kubeadm upgrade`, certificate renewal, etcd backup/restore.
+18. In-cluster Gitea/Forgejo + ARC runners.
+19. Cloudflare Tunnel + Zero Trust for public/friend access.
+20. Velero + Longhorn backups → Cloudflare R2; UPS graceful shutdown; node-failure and restore drills; cosign + Falco.
+21. Ongoing Linux/SRE drills: `kubeadm upgrade`, certificate renewal, etcd backup/restore.
 
 ---
 
@@ -227,6 +239,8 @@ See `docs/phase-0-quickstart.md`.
 - **Node/OS lifecycle:** raw Ubuntu + kubeadm means you own patching and upgrades. In particular, **kubeadm certificates expire (~1 year)** — automate renewal and alert on expiry.
 - **Config drift / snowflakes:** apply the node baseline exclusively through Ansible; never hand-edit nodes. Snapshot etcd before upgrades.
 - **Upgrade discipline:** drain → `kubeadm upgrade` → uncordon, one node at a time; keep a short runbook per operation.
+- **Shared storage disk (interim):** OS, etcd, and Longhorn share one NVMe. A disk failure takes out all three on that node at once — 3-way replication absorbs one such loss, but there is no capacity for a second until the node is rebuilt. The SATA SSD removes this correlated failure.
+- **Capacity math:** "3 replicas everywhere" means usable ≈ raw ÷ 3 (~1 TB). Media and app data share it. Offsite R2 backups are mandatory for total-loss protection.
 - **GPU apps (Immich):** simplest outside the cluster on the gaming PC, or as an on-demand GPU worker later.
 - **Secrets:** never in Git. External Secrets Operator + a backend for cluster secrets; Ansible Vault/SOPS for node secrets; kubeconfigs stay out of every repo.
 

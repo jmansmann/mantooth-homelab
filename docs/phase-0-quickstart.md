@@ -154,16 +154,25 @@ name: build
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    # Skip the tag-bump commit this job itself pushes, otherwise it re-triggers.
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -181,6 +190,8 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
+      - uses: imranismail/setup-kustomize@v2
+
       - name: Update image tag in manifests
         run: |
           IMAGE="ghcr.io/${{ github.repository }}:${{ github.sha }}"
@@ -189,11 +200,13 @@ jobs:
           done
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase
           git add deploy
-          git commit -m "chore: bump image to ${GITHUB_SHA::7}" || echo "no changes"
+          git commit -m "chore: bump image to ${GITHUB_SHA::7}" || echo "no changes to commit"
+          git pull --rebase --autostash
           git push
 ```
+
+> **Order matters:** `kustomize edit set image` dirties the working tree, so commit *before* `git pull --rebase`; otherwise the pull aborts with `cannot pull with rebase: You have unstaged changes`. `--autostash` is a safety net for anything left behind.
 
 > **GHCR visibility:** either make the package public, or create an image-pull secret in the cluster. For a private package in k3d:
 > ```bash
