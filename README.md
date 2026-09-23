@@ -11,6 +11,8 @@ Application **source code does not live here** — each app is its own repositor
 - [`docs/plan.md`](docs/plan.md) — full architecture, hardware, and roadmap
 - [`docs/decisions.md`](docs/decisions.md) — architecture decision records (ADRs)
 - [`docs/phase-0-quickstart.md`](docs/phase-0-quickstart.md) — get a local k3d + Argo CD pipeline running
+- [`docs/phase-0.5-vm-dry-run.md`](docs/phase-0.5-vm-dry-run.md) — rehearse the real cluster in VMs before buying hardware
+- [`docs/notes/storage-architecture.md`](docs/notes/storage-architecture.md) — storage layers, disk layout, replication, backups
 - [`docs/status.md`](docs/status.md) — current state and next actions (handoff)
 
 ## Layout

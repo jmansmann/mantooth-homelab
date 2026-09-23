@@ -1,0 +1,37 @@
+# Generates one Argo CD Application per application repo.
+#
+# Phase 0 uses the explicit `list` generator (ADR-002). Once there are several
+# app repos, swap this for an SCM provider generator so repos are discovered
+# automatically — see docs/phase-0-quickstart.md §6.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - app: hello-mantooth
+            repoURL: https://github.com/jmansmann/hello-mantooth.git
+  template:
+    metadata:
+      name: '{{.app}}'
+      labels:
+        app.kubernetes.io/managed-by: apps-applicationset
+    spec:
+      project: default
+      source:
+        repoURL: '{{.repoURL}}'
+        targetRevision: main
+        path: deploy/overlays/k3d
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.app}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

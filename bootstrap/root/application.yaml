@@ -1,0 +1,27 @@
+# Root app-of-apps. Applied by hand exactly once (it is what installs the apps
+# that Argo CD then reconciles). Everything after this flows through Git.
+#
+#   kubectl apply -f bootstrap/root/application.yaml
+#
+# It points Argo CD at clusters/k3d, where the platform Applications and the
+# apps ApplicationSet live.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/jmansmann/mantooth-homelab.git
+    targetRevision: main
+    path: clusters/k3d
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
