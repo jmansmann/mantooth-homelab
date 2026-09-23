@@ -18,7 +18,6 @@ Living document tracking where the project is. Update it at the end of each work
 - Repo skeleton committed: `bootstrap/`, `platform/`, `clusters/{k3d,homelab}/`
 
 ## Next actions (Phase 0)
-
 1. Create the GitHub remotes and push `main` (`mantooth-homelab` now; `mantooth-ansible` when Phase 1 begins):
    ```bash
    git remote add origin git@github.com:<GITHUB_USER>/mantooth-homelab.git
@@ -43,3 +42,4 @@ Living document tracking where the project is. Update it at the end of each work
 - **Dev machine:** Apple Silicon (arm64); cluster target is amd64 → **always build multi-arch** (ADR-004).
 - **Agents:** run from `~/development` (workspace root) or this repo; conventions live in the `AGENTS.md` files.
 - **Hardware plan:** 3× used x86 mini PCs running **Ubuntu Server + kubeadm**, OS managed by **Ansible** (ADR-010, ADR-011); gaming PC stays separate (ADR-008).
+

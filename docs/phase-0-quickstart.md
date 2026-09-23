@@ -21,6 +21,7 @@ Create two **private** repos on GitHub:
 - `jmansmann/mantooth-homelab` — this config repo
 - `jmansmann/<app>` — your first application (a small webapp)
 
+
 Wire up the local `mantooth-homelab` repo (run from `~/development/mantooth-homelab`):
 
 ```bash
@@ -79,6 +80,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/jmansmann/mantooth-homelab.git
+    repoURL: https://github.com/GITHUB_USER/mantooth-homelab.git
     targetRevision: main
     path: clusters/k3d
   destination:
