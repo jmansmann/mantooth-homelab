@@ -13,13 +13,12 @@ Living document tracking where the project is. Update it at the end of each work
 ## Done
 
 - Architecture, hardware BOM, repo model, and Phase 0–5 roadmap — `docs/plan.md`
-- Decisions recorded as ADR-001…009 — `docs/decisions.md`
+- Decisions recorded as ADR-001…011 — `docs/decisions.md` (ADR-001 Talos superseded by ADR-010)
 - Phase 0 runbook — `docs/phase-0-quickstart.md`
 - Repo skeleton committed: `bootstrap/`, `platform/`, `clusters/{k3d,homelab}/`
 
 ## Next actions (Phase 0)
-
-1. Add the GitHub remote and push `main`:
+1. Create the GitHub remotes and push `main` (`mantooth-homelab` now; `mantooth-ansible` when Phase 1 begins):
    ```bash
    git remote add origin git@github.com:<GITHUB_USER>/mantooth-homelab.git
    git push -u origin main
@@ -33,7 +32,7 @@ Living document tracking where the project is. Update it at the end of each work
 
 ## Open questions / deferred
 
-- **First real webapp** — not yet chosen. Decide before step 2d.
+- **First real webapp** — not yet chosen. Decide before step 2.d.
 - **App auto-discovery** — the `scmProvider` generator is deferred until there are 2+ app repos; the `list` generator is used until then.
 - **Immich GPU strategy** — deferred to Phase 4 (run outside the cluster vs. on-demand GPU worker on the gaming PC).
 
@@ -42,4 +41,5 @@ Living document tracking where the project is. Update it at the end of each work
 - **Local path:** `~/development/mantooth-homelab`
 - **Dev machine:** Apple Silicon (arm64); cluster target is amd64 → **always build multi-arch** (ADR-004).
 - **Agents:** run from `~/development` (workspace root) or this repo; conventions live in the `AGENTS.md` files.
-- **Hardware plan:** 3× used x86 mini PCs running Talos (ADR-001); gaming PC stays separate (ADR-008).
+- **Hardware plan:** 3× used x86 mini PCs running **Ubuntu Server + kubeadm**, OS managed by **Ansible** (ADR-010, ADR-011); gaming PC stays separate (ADR-008).
+

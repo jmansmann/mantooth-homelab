@@ -13,13 +13,13 @@ The GitOps **config** repository for the home Kubernetes cluster. Argo CD reconc
 - `bootstrap/` — one-time bring-up; the root app-of-apps Application.
 - `docs/` — plan, ADRs, quickstarts.
 
-**Do not put application source code here.** App repos own their source *and* their deployment manifests (ADR-002). This repo only references and discovers them.
+**Do not put application source code here.** App repos own their source *and* their deployment manifests (ADR-002). This repo only references and discovers them. **OS provisioning lives in `mantooth-ansible`** (ADR-011) — this repo is only what Argo CD syncs.
 
 ## Conventions
 
 - **Kustomize-first.** Use Kustomize bases + overlays for our own resources. Consume upstream Helm charts by reference (chart repo + pinned version); never vendor charts.
 - **Pin versions.** Every Helm chart and container image is pinned — no floating `latest`.
-- **No secrets in Git.** Use External Secrets Operator + a secret backend. Never commit kubeconfigs, Talos secrets, tokens, or `.env` files (see `.gitignore`).
+- **No secrets in Git.** Use External Secrets Operator + a secret backend. Never commit kubeconfigs, node secrets, tokens, or `.env` files (see `.gitignore`).
 - **Multi-arch images only** (`linux/amd64`, `linux/arm64`). The dev cluster runs on Apple Silicon and the bare-metal cluster is amd64 (ADR-004).
 - **GitOps is the interface.** Change the cluster by committing here (or to an app repo). Do not `kubectl apply` long-lived changes by hand.
 - **Write an ADR** in `docs/decisions.md` for significant decisions.

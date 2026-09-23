@@ -6,7 +6,7 @@ Lifecycle: `Proposed → Accepted → (Superseded | Deprecated)`. Don't delete o
 
 | # | Title | Status |
 |---|---|---|
-| [001](#adr-001-three-node-talos-linux-ha-cluster) | Three-node Talos Linux HA cluster | Accepted |
+| [001](#adr-001-three-node-talos-linux-ha-cluster) | Three-node Talos Linux HA cluster | Superseded by 010 |
 | [002](#adr-002-app-repos-own-their-source-and-deployment-manifests) | App repos own their source and deployment manifests | Accepted |
 | [003](#adr-003-github-actions--ghcr--argo-cd-pull-based-gitops) | GitHub Actions → GHCR → Argo CD (pull-based GitOps) | Accepted |
 | [004](#adr-004-multi-arch-container-images) | Multi-arch container images | Accepted |
@@ -15,13 +15,17 @@ Lifecycle: `Proposed → Accepted → (Superseded | Deprecated)`. Don't delete o
 | [007](#adr-007-longhorn-for-persistent-storage) | Longhorn for persistent storage | Accepted |
 | [008](#adr-008-gaming-pc-kept-separate-from-the-247-cluster) | Gaming PC kept separate from the 24/7 cluster | Accepted |
 | [009](#adr-009-managed-switch--virtualized-opnsense-lab-vlan-first) | Managed switch + virtualized OPNsense (lab VLAN first) | Accepted |
+| [010](#adr-010-ubuntu-server--kubeadm-on-bare-metal) | Ubuntu Server + kubeadm on bare metal | Accepted |
+| [011](#adr-011-ansible-manages-the-os-layer) | Ansible manages the OS layer | Accepted |
 
 ---
 
 ## ADR-001: Three-node Talos Linux HA cluster
 
 ### Status
-Accepted
+Superseded by [ADR-010](#adr-010-ubuntu-server--kubeadm-on-bare-metal)
+
+> **Note:** Superseded. The primary cluster now runs Ubuntu Server + kubeadm to maximize Linux/SRE exposure. Retained for historical context.
 
 ### Date
 2026-09-20
@@ -253,3 +257,63 @@ Use a **managed switch** for VLAN segmentation, and run **OPNsense virtualized**
 - Safe, incremental networking learning; a rebooting node won't take down home internet.
 - Requires VLAN trunking / router-on-a-stick on a node's NIC.
 - Edge routing remains with the ISP router until we deliberately change it.
+
+---
+
+## ADR-010: Ubuntu Server + kubeadm on bare metal
+
+### Status
+Accepted
+
+### Date
+2026-09-20
+
+### Context
+The learning goals center on platform/SRE/Kubernetes work. Talos Linux (ADR-001) abstracts away the OS entirely — no shell, no package management, managed node upgrades, managed certificates. That removes precisely the Day-2 complexity (node upgrades, certificate expiry, config drift, containerd/kernel/network tuning) that the user wants hands-on exposure to, and which they confront professionally. Full-stack Linux exposure is therefore a higher priority than Talos' low operational burden. The hardware is unchanged (3× used x86 mini PCs).
+
+### Decision
+Run **Ubuntu Server LTS** on all three mini PCs and install Kubernetes with **kubeadm**. All three nodes are control-plane + worker with stacked etcd, fronted by a control-plane VIP (kube-vip or keepalived + haproxy). Container runtime: **containerd**. The OS layer is managed with **Ansible** (ADR-011). Talos may be revisited later by re-imaging a node, as a deliberate contrast exercise.
+
+### Alternatives Considered
+- **Talos Linux** — lowest operational burden and strong GitOps ergonomics, but hides the Linux/OS layer that is a primary learning target. Superseded.
+- **RKE2 on Ubuntu** — production-shaped and less toil, but still bundles considerable automation and reduces control-plane/OS surface.
+- **k3s/k0s on Ubuntu** — good Linux exposure with minimal ops, but the control plane is more heavily abstracted than kubeadm.
+- **Debian/Rocky instead of Ubuntu** — equally valid; Ubuntu chosen for the largest documentation/community footprint.
+
+### Consequences
+- Maximum exposure to Linux and the Kubernetes control plane: systemd, containerd, kubelet, PKI, kube-proxy/netfilter, etcd, and version upgrades.
+- Higher ongoing toil: OS and kernel patching, coordinated `kubeadm` upgrades (drain → upgrade → uncordon), etcd upgrades, and **kubeadm certificate expiry (~1 year)** must be managed.
+- Config drift and snowflake risk — mitigated by Ansible (ADR-011), etcd snapshots, and documented runbooks.
+- Nodes trend toward pets rather than cattle; recovery is more manual than re-imaging.
+- Skills transfer directly to most real-world/self-managed Kubernetes environments.
+
+---
+
+## ADR-011: Ansible manages the OS layer
+
+### Status
+Accepted
+
+### Date
+2026-09-20
+
+### Context
+With raw Ubuntu + kubeadm (ADR-010), node configuration is manual by default and drifts quickly. Ansible is itself a widely used SRE skill, so automating the OS layer both reduces risk and adds a relevant learning axis.
+
+### Decision
+Maintain an **Ansible** codebase — in a dedicated repository (`mantooth-ansible`) to keep this GitOps repo focused on cluster desired state — that encodes the node baseline and lifecycle. Initial scope:
+- Base: users, SSH hardening, time sync, unattended-upgrades policy, firewall rules.
+- Kubernetes prerequisites: swap off, kernel modules (`overlay`, `br_netfilter`), sysctl (`ip_forward`, bridge-nf-call-iptables), containerd config (systemd cgroup driver).
+- Cluster: `kubeadm`/`kubelet`/`kubectl` packages, control-plane VIP (kube-vip), join tokens.
+- Day-2: patch runs, `kubeadm upgrade` orchestration (drain/upgrade/uncordon), certificate renewal checks.
+
+### Alternatives Considered
+- **Manual + runbooks only** — maximum manual learning, but drift and human error compound over time.
+- **Cloud-init only** — good for first boot, but not for ongoing convergence/patching.
+- **NixOS** — powerful declarative OS, but a steeper detour and less representative of typical SRE environments.
+
+### Consequences
+- Reproducible node builds; drift is detectable and correctable by re-running playbooks.
+- Adds a repo and a skill to maintain; playbooks must be tested.
+- Secret handling matters: Ansible Vault (or SOPS) for any secrets; never commit plaintext.
+- The Ansible repo becomes part of the disaster-recovery story (rebuild a node from code).

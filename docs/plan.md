@@ -12,6 +12,7 @@ A personal home lab built as a production-shaped Kubernetes platform: real GitOp
 |---|---|
 | **Storage** | Photo backup (Google Photos replacement) and general cloud storage (Google Drive replacement); hundreds of GB to start |
 | **Compute** | Multi-node Kubernetes for learning, with deep exposure to the control plane |
+| **Linux/SRE** | Hands-on Linux systems administration — systemd, containerd, kernel/network tuning, node upgrades, certificate management — built and fixed by hand, not abstracted away |
 | **Networking** | Hands-on learning; securely expose services to the public internet |
 | **Apps** | Self-hosted personal webapps, reachable from anywhere, shared with friends |
 | **Dev/Platform** | A production-like pipeline: CI/CD, environments, redundancy |
@@ -26,7 +27,7 @@ See `docs/decisions.md` for full ADRs.
 
 | # | Decision |
 |---|---|
-| 001 | 3-node **Talos Linux** HA cluster (all nodes control-plane + worker, stacked etcd, control-plane VIP) |
+| 010 | 3-node **Ubuntu Server + kubeadm** HA cluster (all nodes control-plane + worker, stacked etcd, control-plane VIP) — supersedes 001 |
 | 002 | **App repos own their source and deployment manifests**; the config repo discovers them via an Argo CD ApplicationSet |
 | 003 | **GitHub Actions → GHCR → Argo CD** (pull-based GitOps) for CI/CD |
 | 004 | **Multi-arch images** (`linux/amd64`, `linux/arm64`) |
@@ -35,6 +36,7 @@ See `docs/decisions.md` for full ADRs.
 | 007 | **Longhorn** for replicated persistent storage |
 | 008 | The gaming PC stays a **separate** dev/CI/GPU box — not a 24/7 cluster node |
 | 009 | **Managed VLAN switch + virtualized OPNsense** (lab VLAN first; not the sole internet gateway) |
+| 011 | **Ansible** manages the OS layer (bootstrap, patching, upgrades) to prevent drift |
 
 ---
 
@@ -57,7 +59,7 @@ See `docs/decisions.md` for full ADRs.
         │        ▼                                       │
         │   MetalLB VIP ── Envoy Gateway ── Services    │
         │                                               │
-        │   3× Mini PC — Talos Linux (amd64)            │
+        │   3× Mini PC — Ubuntu + kubeadm (amd64)       │
         │     node1/node2/node3 = control plane+worker  │
         │     stacked etcd · control-plane VIP          │
         │     Cilium · Longhorn · Argo CD · runners     │
@@ -67,6 +69,8 @@ See `docs/decisions.md` for full ADRs.
 ```
 
 **Why 3 control-plane nodes:** stacked etcd with 3 nodes gives a real quorum (tolerates one failure) and is the closest bare-metal analog to a managed HA control plane — the exact thing to learn for GKE/EKS work.
+
+**OS layer:** nodes run Ubuntu Server LTS, provisioned and patched by **Ansible** (ADR-011); Kubernetes is installed with **kubeadm** (ADR-010). The OS and node lifecycle are deliberately *not* abstracted — building and fixing them is part of the goal.
 
 **Local-first:** everything is reachable from your Mac and phone on home WiFi *before* anything is exposed publicly. Public access is layered on later via the same Gateway.
 
@@ -90,6 +94,8 @@ See `docs/decisions.md` for full ADRs.
 
 Notes:
 
+- **CPU:** target **i5-8500T / i5-9500T (6c/6t, 8th–9th gen)**; step up to **i7-8700T/9700T or i5-10500T** only if the delta is small. Cores/threads matter more than clocks or generation here — 8th→9th is a minor refresh, and 12th-gen IPC gains aren't worth the platform premium.
+- **RAM:** **32 GB (2×16 GB) used DDR4 SO-DIMM per node**, both slots populated as a matched pair. Prefer DDR4 over DDR5 — the bandwidth difference is negligible for etcd/Longhorn/containers (latency- and IO-bound), and used DDR4 pulls from retired office PCs are far cheaper. Dual-channel and capacity matter more than memory speed.
 - Buy the three nodes as one matched lot from a refurb seller; used DDR4 SO-DIMM is cheap in bulk.
 - Idle power ≈ 45 W, loaded ≈ 150 W — effectively silent and cool. The gaming PC stays off the 24/7 path for exactly this reason.
 - **OPNsense caveat:** do not make a *virtualized* OPNsense your sole internet gateway initially — if that node reboots, the whole apartment loses internet. Start it as a lab-VLAN router; promote it to the edge (or add a dedicated 2-NIC N100 appliance, ~$150–200) once comfortable.
@@ -98,12 +104,13 @@ Notes:
 
 ## 5. Repository model
 
-Two kinds of repositories, one discovery mechanism:
+Three repositories serve the lab:
 
 | Content | Repo |
 |---|---|
 | Platform components, cluster overlays, ApplicationSets, bootstrap | **`mantooth-homelab`** (this repo — the GitOps/config repo) |
 | Application source, Dockerfile, tests, **and** deployment manifests | **One repo per app** (`<app>`) |
+| Node OS provisioning and patching (Ansible) | **`mantooth-ansible`** (see ADR-011) |
 | Third-party Helm charts | Referenced by URL + pinned version (never vendored) |
 
 The `mantooth-homelab` repo holds an **Argo CD ApplicationSet** that generates one Application per app repo. Onboarding a new app = creating a repo that follows the convention; the ApplicationSet picks it up.
@@ -148,7 +155,7 @@ This reproduces the real "app pipeline ↔ GitOps repo" boundary that platform t
 | Runtime security | Trivy Operator, Falco, cosign image signing | Artifact/registry scanning |
 | Backups | Velero + Longhorn → Cloudflare R2 | Managed backups |
 
-Control plane (Talos-managed): kube-apiserver, etcd, kube-scheduler, kube-controller-manager — HA, with a control-plane VIP.
+Control plane (kubeadm-managed): kube-apiserver, etcd, kube-scheduler, kube-controller-manager — HA, with a control-plane VIP (kube-vip). Container runtime: containerd.
 
 ---
 
@@ -178,7 +185,7 @@ Control plane (Talos-managed): kube-apiserver, etcd, kube-scheduler, kube-contro
 ## 9. Roadmap
 
 ### Phase 0 — Now, on the Mac (no hardware required)
-1. Install tooling; create GitHub repos (`mantooth-homelab`, first `<app>`).
+1. Install tooling; create GitHub repos (`mantooth-homelab`, `mantooth-ansible`, first `<app>`).
 2. Scaffold the repos and this documentation.
 3. Create a local **k3d** cluster + install **Argo CD**.
 4. Build a first webapp with a **multi-arch** Dockerfile; GitHub Actions → GHCR; Argo CD deploys it to k3d.
@@ -186,25 +193,28 @@ Control plane (Talos-managed): kube-apiserver, etcd, kube-scheduler, kube-contro
 
 See `docs/phase-0-quickstart.md`.
 
-### Phase 1 — Physical
+### Phase 1 — Physical & OS
 6. Rack, switch, cabling; configure VLANs.
-7. Bench nodes, upgrade RAM/disks, flash Talos; apply machine configs (etcd HA + VIP); bootstrap.
+7. Bench nodes, upgrade RAM/disks; install Ubuntu Server LTS.
+8. **Ansible baseline** (ADR-011): users/SSH, time sync, swap off, kernel modules + sysctl, containerd, `kubeadm`/`kubelet`/`kubectl`, patching policy.
+9. `kubeadm init` with a control-plane VIP (kube-vip) + CNI; join the remaining nodes; verify etcd quorum and HA.
 
 ### Phase 2 — Core platform → LAN access working
-8. Argo CD → Cilium → MetalLB → Gateway API/Envoy Gateway → cert-manager → **LAN DNS** → Longhorn.
-9. Reach apps from Mac and phone on WiFi with valid TLS. No public exposure yet.
-10. Add OPNsense lab router + VLANs.
+10. Argo CD → Cilium → MetalLB → Gateway API/Envoy Gateway → cert-manager → **LAN DNS** → Longhorn.
+11. Reach apps from Mac and phone on WiFi with valid TLS. No public exposure yet.
+12. Add OPNsense lab router + VLANs.
 
 ### Phase 3 — Platform services
-11. Observability (Prometheus/Grafana/Loki); External Secrets Operator; Kyverno + PSS + NetworkPolicies + Trivy.
+13. Observability (Prometheus/Grafana/Loki); External Secrets Operator; Kyverno + PSS + NetworkPolicies + Trivy.
 
 ### Phase 4 — Workloads
-12. Immich (photos), Nextcloud or Syncthing+Filebrowser (files), Vaultwarden, Authentik SSO, dashboards.
+14. Immich (photos), Nextcloud or Syncthing+Filebrowser (files), Vaultwarden, Authentik SSO, dashboards.
 
 ### Phase 5 — Public, local CI, resilience
-13. In-cluster Gitea/Forgejo + ARC runners.
-14. Cloudflare Tunnel + Zero Trust for public/friend access.
-15. Velero + Longhorn backups → Cloudflare R2; UPS graceful shutdown; node-failure and restore drills; cosign + Falco.
+15. In-cluster Gitea/Forgejo + ARC runners.
+16. Cloudflare Tunnel + Zero Trust for public/friend access.
+17. Velero + Longhorn backups → Cloudflare R2; UPS graceful shutdown; node-failure and restore drills; cosign + Falco.
+18. Ongoing Linux/SRE drills: `kubeadm upgrade`, certificate renewal, etcd backup/restore.
 
 ---
 
@@ -214,12 +224,35 @@ See `docs/phase-0-quickstart.md`.
 - **Virtualized firewall:** lab VLAN only until proven; it must not gate the whole home's internet.
 - **Split-horizon DNS:** public Cloudflare → tunnel; internal DNS → LAN VIP. Same names, different answers.
 - **Image architecture:** build `linux/amd64` (or multi-arch). GitHub runners and cluster are amd64; Mac k3d is arm64.
+- **Node/OS lifecycle:** raw Ubuntu + kubeadm means you own patching and upgrades. In particular, **kubeadm certificates expire (~1 year)** — automate renewal and alert on expiry.
+- **Config drift / snowflakes:** apply the node baseline exclusively through Ansible; never hand-edit nodes. Snapshot etcd before upgrades.
+- **Upgrade discipline:** drain → `kubeadm upgrade` → uncordon, one node at a time; keep a short runbook per operation.
 - **GPU apps (Immich):** simplest outside the cluster on the gaming PC, or as an on-demand GPU worker later.
-- **Secrets:** never in Git. External Secrets Operator + a backend; kubeconfigs/Talos secrets stay out of the repo.
+- **Secrets:** never in Git. External Secrets Operator + a backend for cluster secrets; Ansible Vault/SOPS for node secrets; kubeconfigs stay out of every repo.
 
 ---
 
-## 11. Stretch ideas
+## 11. Linux/SRE learning track
+
+Raw Ubuntu + kubeadm is chosen specifically to exercise these, roughly in order:
+
+| Domain | Where it's practiced |
+|---|---|
+| systemd, journald, users/SSH, packages | Ansible baseline (Phase 1) |
+| Kernel modules, `sysctl`, cgroups v2, namespaces | Ansible baseline + Cilium/eBPF (Phases 1–2) |
+| containerd / CRI / OCI runtime | Phase 1 and ongoing |
+| Networking: `ip`, nftables, routing, DNS, VLANs | OPNsense + switch + LAN DNS (Phase 2) |
+| Storage: LVM, filesystems, NFS/iSCSI | Longhorn + node disks (Phase 2) |
+| PKI / TLS / certificates | cert-manager + **kubeadm cert renewal** |
+| Debugging: `journalctl`, `strace`, `tcpdump`, `perf` | Throughout |
+| K8s node lifecycle: `kubeadm upgrade`, etcd backup/restore | Phase 5 drills |
+| Config management at scale | Ansible (ongoing) |
+
+Talos can be revisited later by re-imaging a node — a deliberate contrast in abstraction (see ADR-001, superseded by ADR-010).
+
+---
+
+## 12. Stretch ideas
 
 - **Cluster API (CAPI)** — use the lab as a management cluster to provision workload clusters.
 - **Crossplane** — expose the platform as declarative APIs.
