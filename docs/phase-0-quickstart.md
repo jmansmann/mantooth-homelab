@@ -2,7 +2,7 @@
 
 Goal: before buying any hardware, stand up a **local Kubernetes cluster**, install **Argo CD**, and ship a first webapp through a real pipeline: **GitHub Actions → GHCR → Argo CD (pull-based GitOps)**, building **multi-arch** images.
 
-> Replace `GITHUB_USER` with your GitHub username/org throughout.
+> Replace `jmansmann` with your GitHub username/org throughout.
 
 ## 0. Prerequisites
 
@@ -18,13 +18,13 @@ Verify: `docker info`, `k3d version`, `kubectl version --client`, `argocd versio
 
 Create two **private** repos on GitHub:
 
-- `GITHUB_USER/mantooth-homelab` — this config repo
-- `GITHUB_USER/<app>` — your first application (a small webapp)
+- `jmansmann/mantooth-homelab` — this config repo
+- `jmansmann/<app>` — your first application (a small webapp)
 
 Wire up the local `mantooth-homelab` repo (run from `~/development/mantooth-homelab`):
 
 ```bash
-git remote add origin git@github.com:GITHUB_USER/mantooth-homelab.git
+git remote add origin git@github.com:jmansmann/mantooth-homelab.git
 git push -u origin main
 ```
 
@@ -78,7 +78,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/GITHUB_USER/mantooth-homelab.git
+    repoURL: https://github.com/jmansmann/mantooth-homelab.git
     targetRevision: main
     path: clusters/k3d
   destination:
@@ -101,7 +101,7 @@ Everything under `clusters/k3d/` is now reconciled by Argo CD.
 
 ## 5. First application repo
 
-Create `GITHUB_USER/<app>` with this layout:
+Create `jmansmann/<app>` with this layout:
 
 ```
 <app>/
@@ -129,7 +129,7 @@ resources:
   - deployment.yaml
   - service.yaml
 images:
-  - name: ghcr.io/GITHUB_USER/<app>
+  - name: ghcr.io/jmansmann/<app>
     newTag: latest
 ```
 
@@ -197,7 +197,7 @@ jobs:
 > ```bash
 > kubectl create secret docker-registry ghcr-pull \
 >   --docker-server=ghcr.io \
->   --docker-username=GITHUB_USER \
+>   --docker-username=jmansmann \
 >   --docker-password=<a PAT with read:packages>
 > ```
 > then reference `imagePullSecrets: [{ name: ghcr-pull }]` in the Deployment.
@@ -218,7 +218,7 @@ spec:
     - list:
         elements:
           - app: <app>
-            repoURL: https://github.com/GITHUB_USER/<app>.git
+            repoURL: https://github.com/jmansmann/<app>.git
   template:
     metadata:
       name: '{{.app}}'

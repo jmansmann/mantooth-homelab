@@ -94,6 +94,8 @@ See `docs/decisions.md` for full ADRs.
 
 Notes:
 
+- **CPU:** target **i5-8500T / i5-9500T (6c/6t, 8th–9th gen)**; step up to **i7-8700T/9700T or i5-10500T** only if the delta is small. Cores/threads matter more than clocks or generation here — 8th→9th is a minor refresh, and 12th-gen IPC gains aren't worth the platform premium.
+- **RAM:** **32 GB (2×16 GB) used DDR4 SO-DIMM per node**, both slots populated as a matched pair. Prefer DDR4 over DDR5 — the bandwidth difference is negligible for etcd/Longhorn/containers (latency- and IO-bound), and used DDR4 pulls from retired office PCs are far cheaper. Dual-channel and capacity matter more than memory speed.
 - Buy the three nodes as one matched lot from a refurb seller; used DDR4 SO-DIMM is cheap in bulk.
 - Idle power ≈ 45 W, loaded ≈ 150 W — effectively silent and cool. The gaming PC stays off the 24/7 path for exactly this reason.
 - **OPNsense caveat:** do not make a *virtualized* OPNsense your sole internet gateway initially — if that node reboots, the whole apartment loses internet. Start it as a lab-VLAN router; promote it to the edge (or add a dedicated 2-NIC N100 appliance, ~$150–200) once comfortable.
