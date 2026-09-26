@@ -8,18 +8,19 @@ image: rancher/k3s:v1.35.5-k3s1
 options:
   k3d:
     wait: true
-    kubeconfig:
-      updateDefaultKubeconfig: true
-      switchCurrentContext: true
   k3s:
     extraArgs:
       - arg: --disable=traefik
         nodeFilters:
           - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true
 
-# Add host-to-node bind mounts here when the local app/PV paths are known.
-# For example:
-# volumes:
-#   - volume: /absolute/host/path:/path/in/node
-#     nodeFilters:
-#       - all
+volumes:
+  - volume: ${HOME}/.local/share/mantooth-tasks/dev:/var/lib/mantooth-tasks/dev
+    nodeFilters:
+      - all
+  - volume: ${HOME}/.local/share/mantooth-tasks/prod:/var/lib/mantooth-tasks/prod
+    nodeFilters:
+      - all

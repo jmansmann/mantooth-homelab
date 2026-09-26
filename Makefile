@@ -11,7 +11,7 @@ ARGOCD_VERSION ?= v3.5.3
 
 .DEFAULT_GOAL := help
 
-.PHONY: help render verify validate cluster-up cluster-delete argocd-install bootstrap
+.PHONY: help render verify validate cluster-up cluster-delete cluster-recreate argocd-install bootstrap
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -41,7 +41,12 @@ cluster-up: ## Start/create k3d, install Argo CD, and bootstrap the root app
 	$(MAKE) bootstrap
 
 cluster-delete: ## Delete the k3d cluster (node-container data is removed)
-	$(K3D) cluster delete "$(K3D_CLUSTER)"
+	@test "$(K3D_CLUSTER)" = dev || { echo "refusing to delete cluster '$(K3D_CLUSTER)'; only dev is permitted" >&2; exit 1; }
+	@test "$$($(KUBECTL) config current-context)" = k3d-dev || { echo "refusing to delete dev: current context must be k3d-dev" >&2; exit 1; }
+	$(K3D) cluster delete dev
+
+cluster-recreate: ## Explicitly recreate dev with persistent host mounts and restore Argo CD
+	./scripts/recreate-k3d-dev.sh
 
 argocd-install: ## Install the pinned Argo CD version into the current cluster
 	$(KUBECTL) create namespace argocd --dry-run=client -o yaml | $(KUBECTL) apply -f -
