@@ -13,6 +13,11 @@ This is the sync target of the root app-of-apps in `bootstrap/`. It selects plat
 
 Differences from `clusters/homelab`: smaller resource requests, no Longhorn replication (`longhorn` may be omitted for single-replica), local DNS/TLS substitutes.
 
+The ApplicationSet lists `mantooth-tasks` alongside `hello-mantooth`. Merge and
+publish the app repository's first immutable image, and merge the image-tag PR,
+before merging this onboarding change; that keeps the new Argo CD Application
+from attempting to pull its placeholder image.
+
 ## Cluster lifecycle
 
 ```bash
