@@ -17,9 +17,10 @@ options:
         nodeFilters:
           - server:*
 
-# Add host-to-node bind mounts here when the local app/PV paths are known.
-# For example:
-# volumes:
-#   - volume: /absolute/host/path:/path/in/node
-#     nodeFilters:
-#       - all
+volumes:
+  - volume: ${HOME}/.local/share/mantooth-tasks/dev:/var/lib/mantooth-tasks/dev
+    nodeFilters:
+      - all
+  - volume: ${HOME}/.local/share/mantooth-tasks/prod:/var/lib/mantooth-tasks/prod
+    nodeFilters:
+      - all
