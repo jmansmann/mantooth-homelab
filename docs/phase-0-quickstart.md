@@ -49,7 +49,7 @@ kubectl get nodes
 ```bash
 kubectl create namespace argocd
 kubectl apply --server-side -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
 kubectl -n argocd rollout status deploy/argocd-server
 ```
 
@@ -79,7 +79,6 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/jmansmann/mantooth-homelab.git
     repoURL: https://github.com/GITHUB_USER/mantooth-homelab.git
     targetRevision: main
     path: clusters/k3d
@@ -92,10 +91,28 @@ spec:
       selfHeal: true
 ```
 
-Apply it once, by hand — after this, everything flows through Git:
+For private Git repositories, Argo CD's CLI can register a **read-only GitHub
+App** directly. Install the App on both repositories with `Contents: read`,
+keep its PEM private key outside the repo, and register both URLs before
+applying the root Application:
 
 ```bash
-kubectl apply -f bootstrap/root/application.yaml
+argocd repo add https://github.com/GITHUB_USER/mantooth-homelab.git \
+  --github-app-id "$APP_ID" \
+  --github-app-installation-id "$INSTALLATION_ID" \
+  --github-app-private-key-path "$HOME/.config/github/argo-readonly-app.pem"
+argocd repo add 'https://github.com/GITHUB_USER/<app>.git' \
+  --github-app-id "$APP_ID" \
+  --github-app-installation-id "$INSTALLATION_ID" \
+  --github-app-private-key-path "$HOME/.config/github/argo-readonly-app.pem"
+```
+
+These commands store repository credentials as Kubernetes Secrets in the
+`argocd` namespace. Public repositories need no credentials. Then apply the
+root app-of-apps:
+
+```bash
+make bootstrap
 argocd app get root
 ```
 
@@ -154,10 +171,15 @@ name: build
 on:
   push:
     branches: [main]
+    # The tag-bump commit only touches deploy/; ignoring it stops the bot's own
+    # push from re-triggering a build (works for any bot identity).
+    paths-ignore:
+      - 'deploy/**'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  # The app token handles the git write; GITHUB_TOKEN only needs to push images.
+  contents: read
   packages: write
 
 concurrency:
@@ -166,12 +188,20 @@ concurrency:
 
 jobs:
   build:
-    # Skip the tag-bump commit this job itself pushes, otherwise it re-triggers.
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          # GitHub App with Contents: write, added to the main bypass list.
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - uses: actions/checkout@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       - uses: docker/setup-qemu-action@v3
@@ -183,18 +213,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=long
+
       - uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - uses: imranismail/setup-kustomize@v2
 
       - name: Update image tag in manifests
         run: |
-          IMAGE="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE="ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}"
           for env in k3d homelab; do
             (cd "deploy/overlays/$env" && kustomize edit set image "ghcr.io/${{ github.repository }}=$IMAGE")
           done
@@ -207,6 +246,8 @@ jobs:
 ```
 
 > **Order matters:** `kustomize edit set image` dirties the working tree, so commit *before* `git pull --rebase`; otherwise the pull aborts with `cannot pull with rebase: You have unstaged changes`. `--autostash` is a safety net for anything left behind.
+
+> **Protected `main`:** if `main` requires pull requests, the default `GITHUB_TOKEN` cannot push the bump (GH006). Create a **GitHub App** with `Contents: write`, install it on the repo, add it to the branch ruleset's **bypass list**, store its App ID and private key as `APP_ID` / `APP_PRIVATE_KEY` secrets, and mint a per-run token with `actions/create-github-app-token` as shown above.
 
 > **GHCR visibility:** either make the package public, or create an image-pull secret in the cluster. For a private package in k3d:
 > ```bash

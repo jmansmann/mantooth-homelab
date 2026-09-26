@@ -1,0 +1,25 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: dev
+servers: 1
+agents: 2
+image: rancher/k3s:v1.35.5-k3s1
+options:
+  k3d:
+    wait: true
+    kubeconfig:
+      updateDefaultKubeconfig: true
+      switchCurrentContext: true
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+
+# Add host-to-node bind mounts here when the local app/PV paths are known.
+# For example:
+# volumes:
+#   - volume: /absolute/host/path:/path/in/node
+#     nodeFilters:
+#       - all
