@@ -8,14 +8,14 @@ image: rancher/k3s:v1.35.5-k3s1
 options:
   k3d:
     wait: true
-    kubeconfig:
-      updateDefaultKubeconfig: true
-      switchCurrentContext: true
   k3s:
     extraArgs:
       - arg: --disable=traefik
         nodeFilters:
           - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true
 
 volumes:
   - volume: ${HOME}/.local/share/mantooth-tasks/dev:/var/lib/mantooth-tasks/dev
