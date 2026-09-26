@@ -11,7 +11,7 @@ ARGOCD_VERSION ?= v3.5.3
 
 .DEFAULT_GOAL := help
 
-.PHONY: help render verify validate cluster-up cluster-delete argocd-install bootstrap
+.PHONY: help render verify validate cluster-up cluster-delete argocd-install argocd-port-forward bootstrap
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ argocd-install: ## Install the pinned Argo CD version into the current cluster
 	$(KUBECTL) create namespace argocd --dry-run=client -o yaml | $(KUBECTL) apply -f -
 	$(KUBECTL) apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
 	$(KUBECTL) -n argocd rollout status deployment/argocd-server --timeout=180s
+
+argocd-port-forward: ## Forward the Argo CD UI to https://localhost:8080
+	$(KUBECTL) -n argocd port-forward svc/argocd-server 8080:443
 
 bootstrap: ## Apply the root app-of-apps (register private repos with Argo CLI first)
 	$(KUBECTL) apply -f bootstrap/root/application.yaml
